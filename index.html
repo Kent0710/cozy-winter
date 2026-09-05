@@ -5166,105 +5166,56 @@
         instancedFoliageMaterial.color.setHex(0xffffff);
         const instancedSnowMaterial = pineSnowMaterial.clone();
         instancedSnowMaterial.color.setHex(0xffffff);
-        instancedSnowMaterial.opacity = 0.86;
-        instancedSnowMaterial.depthWrite = false;
+        instancedSnowMaterial.opacity = 0.95;
+        instancedSnowMaterial.depthWrite = true;
         const maximumTreeInstances = treeInstanceData.length;
 
-        function createTreeTierBatch(geometry, material, name) {
-          const batch = new THREE.InstancedMesh(
-            geometry,
-            material,
-            maximumTreeInstances
-          );
-          batch.name = name;
-          batch.count = 0;
-          batch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-          batch.castShadow = false;
-          batch.receiveShadow = true;
-          batch.frustumCulled = false;
-          detailedForest.add(batch);
-          return batch;
-        }
+        const MAX_TREE_TIERS = 7;
+        const foliageTierGeometry = new THREE.ConeGeometry(1, 1, 16, 3);
+        const snowTierGeometry = new THREE.ConeGeometry(1, 1, 16, 2);
 
         const fullFoliageBatches = [];
         const fullSnowBatches = [];
-        const mediumFoliageBatches = [];
-        const mediumSnowBatches = [];
-        for (let tierIndex = 0; tierIndex < 7; tierIndex += 1) {
-          fullFoliageBatches.push(
-            createTreeTierBatch(
-              new THREE.ConeGeometry(1, 1, 24, 4),
-              instancedFoliageMaterial,
-              `TREE_FULL_FOLIAGE_TIER_${tierIndex}`
-            )
-          );
-          fullSnowBatches.push(
-            createTreeTierBatch(
-              new THREE.ConeGeometry(1, 1, 24, 3),
-              instancedSnowMaterial,
-              `TREE_FULL_SNOW_TIER_${tierIndex}`
-            )
-          );
-        }
-        for (let tierIndex = 0; tierIndex < 4; tierIndex += 1) {
-          mediumFoliageBatches.push(
-            createTreeTierBatch(
-              new THREE.ConeGeometry(1, 1, 12, 2),
-              instancedFoliageMaterial,
-              `TREE_MEDIUM_FOLIAGE_TIER_${tierIndex}`
-            )
-          );
-          mediumSnowBatches.push(
-            createTreeTierBatch(
-              new THREE.ConeGeometry(1, 1, 12, 2),
-              instancedSnowMaterial,
-              `TREE_MEDIUM_SNOW_TIER_${tierIndex}`
-            )
-          );
-        }
 
-        function createMergedDistantTreeGeometry(isSnow) {
-          const geometries = [];
-          const tiers = [
-            { radius: 2.45, height: 3.8, y: 3.25 },
-            { radius: 1.25, height: 2.9, y: 6.25 }
-          ];
-          for (let i = 0; i < tiers.length; i += 1) {
-            const tier = tiers[i];
-            const geometry = new THREE.ConeGeometry(1, 1, 6, 1);
-            const scale = new THREE.Vector3(
-              tier.radius * (isSnow ? 1.05 : 1),
-              tier.height * (isSnow ? 0.25 : 1),
-              tier.radius * (isSnow ? 1.05 : 1)
-            );
-            const position = new THREE.Vector3(
-              0,
-              isSnow ? tier.y + tier.height * 0.38 : tier.y,
-              0
-            );
-            const matrix = new THREE.Matrix4().compose(
-              position,
-              new THREE.Quaternion(),
-              scale
-            );
-            geometries.push(geometry.applyMatrix4(matrix));
+        for (let tierIndex = 0; tierIndex < MAX_TREE_TIERS; tierIndex += 1) {
+          const foliageBatch = new THREE.InstancedMesh(
+            foliageTierGeometry,
+            instancedFoliageMaterial,
+            maximumTreeInstances
+          );
+          foliageBatch.name = `TREE_FOLIAGE_TIER_${tierIndex}`;
+          foliageBatch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          foliageBatch.castShadow = true;
+          foliageBatch.receiveShadow = true;
+          foliageBatch.frustumCulled = false;
+          for (let i = 0; i < maximumTreeInstances; i += 1) {
+            foliageBatch.setColorAt(i, treeInstanceData[i].foliageColor);
           }
-          return THREE.BufferGeometryUtils.mergeBufferGeometries(
-            geometries,
-            false
-          );
-        }
+          if (foliageBatch.instanceColor) {
+            foliageBatch.instanceColor.needsUpdate = true;
+          }
+          detailedForest.add(foliageBatch);
+          fullFoliageBatches.push(foliageBatch);
 
-        const distantFoliageBatch = createTreeTierBatch(
-          createMergedDistantTreeGeometry(false),
-          instancedFoliageMaterial,
-          'TREE_DISTANT_MERGED_FOLIAGE'
-        );
-        const distantSnowBatch = createTreeTierBatch(
-          createMergedDistantTreeGeometry(true),
-          instancedSnowMaterial,
-          'TREE_DISTANT_MERGED_SNOW'
-        );
+          const snowBatch = new THREE.InstancedMesh(
+            snowTierGeometry,
+            instancedSnowMaterial,
+            maximumTreeInstances
+          );
+          snowBatch.name = `TREE_SNOW_TIER_${tierIndex}`;
+          snowBatch.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+          snowBatch.castShadow = false;
+          snowBatch.receiveShadow = true;
+          snowBatch.frustumCulled = false;
+          for (let i = 0; i < maximumTreeInstances; i += 1) {
+            snowBatch.setColorAt(i, treeInstanceData[i].snowColor);
+          }
+          if (snowBatch.instanceColor) {
+            snowBatch.instanceColor.needsUpdate = true;
+          }
+          detailedForest.add(snowBatch);
+          fullSnowBatches.push(snowBatch);
+        }
 
         const treeTrunkInstances = new THREE.InstancedMesh(
           pineTrunkGeometry,
@@ -5289,11 +5240,12 @@
         const treeLocalQuaternion = new THREE.Quaternion();
         const treeEuler = new THREE.Euler();
         const treeLocalEuler = new THREE.Euler();
+        const zeroMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
         for (let i = 0; i < treeInstanceData.length; i += 1) {
           const treeData = treeInstanceData[i];
           treeData.tierVariations = [];
-          for (let tierIndex = 0; tierIndex < 7; tierIndex += 1) {
+          for (let tierIndex = 0; tierIndex < MAX_TREE_TIERS; tierIndex += 1) {
             treeData.tierVariations.push({
               radius: 0.96 + Math.random() * 0.08,
               height: 0.96 + Math.random() * 0.08,
@@ -5326,18 +5278,73 @@
           treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
           treeTrunkInstances.setMatrixAt(i, treeWorldMatrix);
 
-          const lodController = new THREE.LOD();
-          lodController.name = `TREE_LOD_CONTROLLER_${i}`;
-          lodController.position.copy(treePosition);
-          lodController.autoUpdate = false;
-          lodController.addLevel(new THREE.Object3D(), 0);
-          lodController.addLevel(new THREE.Object3D(), 15);
-          lodController.addLevel(new THREE.Object3D(), 30);
-          treeData.lodController = lodController;
-          detailedForest.add(lodController);
+          const tierCount = treeData.tierCount;
+          for (let tierIndex = 0; tierIndex < MAX_TREE_TIERS; tierIndex += 1) {
+            if (tierIndex < tierCount) {
+              const tierProgress = tierIndex / Math.max(1, tierCount - 1);
+              const variation = treeData.tierVariations[tierIndex];
+              const tierRadius =
+                THREE.MathUtils.lerp(2.55, 0.68, tierProgress) *
+                variation.radius;
+              const tierHeight =
+                THREE.MathUtils.lerp(3.55, 1.55, tierProgress) *
+                variation.height;
+              const tierY =
+                2.45 + tierIndex * (6.25 / Math.max(1, tierCount - 1));
+
+              treeLocalPosition.set(0, tierY, 0);
+              treeLocalEuler.set(0, variation.rotation, 0, 'YXZ');
+              treeLocalQuaternion.setFromEuler(treeLocalEuler);
+              treeLocalScale.set(tierRadius, tierHeight, tierRadius);
+              treeLocalMatrix.compose(
+                treeLocalPosition,
+                treeLocalQuaternion,
+                treeLocalScale
+              );
+              treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
+              fullFoliageBatches[tierIndex].setMatrixAt(i, treeWorldMatrix);
+
+              const snowLoadScale = 0.68 + treeData.snowLoad * 0.32;
+              treeLocalPosition.set(0, tierY + tierHeight * 0.36, 0);
+              treeLocalEuler.set(
+                0,
+                variation.rotation + variation.snowRotation,
+                0,
+                'YXZ'
+              );
+              treeLocalQuaternion.setFromEuler(treeLocalEuler);
+              treeLocalScale.set(
+                tierRadius * 1.04 * variation.snowX * snowLoadScale,
+                tierHeight * 0.28 * variation.snowY,
+                tierRadius * 1.04 * variation.snowZ * snowLoadScale
+              );
+              treeLocalMatrix.compose(
+                treeLocalPosition,
+                treeLocalQuaternion,
+                treeLocalScale
+              );
+              treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
+              fullSnowBatches[tierIndex].setMatrixAt(i, treeWorldMatrix);
+            } else {
+              fullFoliageBatches[tierIndex].setMatrixAt(i, zeroMatrix);
+              fullSnowBatches[tierIndex].setMatrixAt(i, zeroMatrix);
+            }
+          }
+
           treeLightingEntries.push(treeData);
         }
+
         treeTrunkInstances.instanceMatrix.needsUpdate = true;
+        for (let tierIndex = 0; tierIndex < MAX_TREE_TIERS; tierIndex += 1) {
+          fullFoliageBatches[tierIndex].instanceMatrix.needsUpdate = true;
+          fullSnowBatches[tierIndex].instanceMatrix.needsUpdate = true;
+          if (fullFoliageBatches[tierIndex].instanceColor) {
+            fullFoliageBatches[tierIndex].instanceColor.needsUpdate = true;
+          }
+          if (fullSnowBatches[tierIndex].instanceColor) {
+            fullSnowBatches[tierIndex].instanceColor.needsUpdate = true;
+          }
+        }
         scene.add(detailedForest);
 
         const rockMaterial = new THREE.MeshStandardMaterial({
@@ -7641,7 +7648,7 @@
             );
           };
           material.customProgramCacheKey = () =>
-            'cinematic-snow-subsurface-v1';
+            `cinematic-snow-subsurface-${material.id}`;
           material.needsUpdate = true;
           snowScatteringStates.push(state);
         }
@@ -8665,107 +8672,17 @@
           layer.mesh.instanceMatrix.needsUpdate = true;
         }
 
-        const allTreeLodBatches = [
-          ...fullFoliageBatches,
-          ...fullSnowBatches,
-          ...mediumFoliageBatches,
-          ...mediumSnowBatches,
-          distantFoliageBatch,
-          distantSnowBatch
-        ];
-
-        function appendTreeInstance(batch, matrix, color) {
-          const instanceIndex = batch.count;
-          batch.setMatrixAt(instanceIndex, matrix);
-          batch.setColorAt(instanceIndex, color);
-          batch.count += 1;
-        }
-
-        function appendTreeTier(
-          treeData,
-          tierIndex,
-          tierCount,
-          foliageBatch,
-          snowBatch,
-          swayX,
-          swayZ
-        ) {
-          const tierProgress = tierIndex / Math.max(1, tierCount - 1);
-          const variation = treeData.tierVariations[tierIndex];
-          const tierRadius =
-            THREE.MathUtils.lerp(2.55, 0.68, tierProgress) *
-            variation.radius;
-          const tierHeight =
-            THREE.MathUtils.lerp(3.55, 1.55, tierProgress) *
-            variation.height;
-          const tierY = 2.45 + tierIndex * (6.25 / Math.max(1, tierCount - 1));
-          const lowerTier = tierIndex < Math.ceil(tierCount * 0.4);
-          const tierDroop = lowerTier
-            ? THREE.MathUtils.degToRad(11.5)
-            : 0;
-
-          treeLocalPosition.set(0, tierY, 0);
-          treeLocalEuler.set(
-            tierDroop + swayX,
-            variation.rotation,
-            swayZ,
-            'YXZ'
-          );
-          treeLocalQuaternion.setFromEuler(treeLocalEuler);
-          treeLocalScale.set(tierRadius, tierHeight, tierRadius);
-          treeLocalMatrix.compose(
-            treeLocalPosition,
-            treeLocalQuaternion,
-            treeLocalScale
-          );
-          treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
-          appendTreeInstance(
-            foliageBatch,
-            treeWorldMatrix,
-            treeData.foliageColor
-          );
-
-          const snowLoadScale = 0.68 + treeData.snowLoad * 0.32;
-          treeLocalPosition.set(0, tierY + tierHeight * 0.375 + 0.025, 0);
-          treeLocalEuler.set(
-            tierDroop + swayX,
-            variation.rotation + variation.snowRotation,
-            swayZ,
-            'YXZ'
-          );
-          treeLocalQuaternion.setFromEuler(treeLocalEuler);
-          treeLocalScale.set(
-            tierRadius * 1.04 * variation.snowX * snowLoadScale,
-            tierHeight * 0.25 * variation.snowY,
-            tierRadius * 1.04 * variation.snowZ * snowLoadScale
-          );
-          treeLocalMatrix.compose(
-            treeLocalPosition,
-            treeLocalQuaternion,
-            treeLocalScale
-          );
-          treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
-          appendTreeInstance(
-            snowBatch,
-            treeWorldMatrix,
-            treeData.snowColor
-          );
-        }
-
         function updateWindSway(elapsed, windStrength) {
-          for (let i = 0; i < allTreeLodBatches.length; i += 1) {
-            allTreeLodBatches[i].count = 0;
-          }
-          camera.updateMatrixWorld();
-          const swayLimit = THREE.MathUtils.degToRad(2) * windStrength;
+          const swayLimit = THREE.MathUtils.degToRad(2.2) * windStrength;
 
           for (let i = 0; i < treeInstanceData.length; i += 1) {
             const treeData = treeInstanceData[i];
-            const distanceToTree = Math.hypot(
-              camera.position.x - treeData.x,
-              camera.position.z - treeData.z
-            );
-            treeData.lodController.update(camera);
+            const swayX =
+              Math.sin(elapsed * 0.85 + treeData.windOffset) * swayLimit;
+            const swayZ =
+              Math.cos(elapsed * 0.72 + treeData.windOffset + 1.15) *
+              swayLimit;
+
             treePosition.set(treeData.x, treeData.y, treeData.z);
             treeEuler.set(
               treeData.leanX,
@@ -8777,87 +8694,82 @@
             treeScale.setScalar(treeData.scale);
             treeBaseMatrix.compose(treePosition, treeQuaternion, treeScale);
 
-            if (distanceToTree < 15) {
-              const swayX =
-                Math.sin(elapsed * 0.8 + treeData.windOffset) * swayLimit;
-              const swayZ =
-                Math.sin(elapsed * 0.8 + treeData.windOffset + 1.15) *
-                swayLimit;
-              for (
-                let tierIndex = 0;
-                tierIndex < treeData.tierCount;
-                tierIndex += 1
-              ) {
-                const isTopTier = tierIndex === treeData.tierCount - 1;
-                appendTreeTier(
-                  treeData,
-                  tierIndex,
-                  treeData.tierCount,
-                  fullFoliageBatches[tierIndex],
-                  fullSnowBatches[tierIndex],
-                  isTopTier ? swayX : 0,
-                  isTopTier ? swayZ : 0
-                );
-              }
-            } else if (distanceToTree < 30) {
-              for (let tierIndex = 0; tierIndex < 4; tierIndex += 1) {
-                appendTreeTier(
-                  treeData,
-                  tierIndex,
-                  4,
-                  mediumFoliageBatches[tierIndex],
-                  mediumSnowBatches[tierIndex],
-                  0,
-                  0
-                );
-              }
-            } else {
-              appendTreeInstance(
-                distantFoliageBatch,
-                treeBaseMatrix,
-                treeData.foliageColor
+            const tierCount = treeData.tierCount;
+            for (let tierIndex = 0; tierIndex < tierCount; tierIndex += 1) {
+              const tierProgress = tierIndex / Math.max(1, tierCount - 1);
+              const variation = treeData.tierVariations[tierIndex];
+              const tierRadius =
+                THREE.MathUtils.lerp(2.55, 0.68, tierProgress) *
+                variation.radius;
+              const tierHeight =
+                THREE.MathUtils.lerp(3.55, 1.55, tierProgress) *
+                variation.height;
+              const tierY =
+                2.45 + tierIndex * (6.25 / Math.max(1, tierCount - 1));
+
+              const swayFactor = tierProgress * tierProgress;
+              const curSwayX = swayX * swayFactor;
+              const curSwayZ = swayZ * swayFactor;
+
+              treeLocalPosition.set(0, tierY, 0);
+              treeLocalEuler.set(
+                curSwayX,
+                variation.rotation,
+                curSwayZ,
+                'YXZ'
               );
-              treeLocalScale.setScalar(
-                0.72 + treeData.snowLoad * 0.28
-              );
-              treeLocalPosition.set(0, 0, 0);
-              treeLocalQuaternion.identity();
+              treeLocalQuaternion.setFromEuler(treeLocalEuler);
+              treeLocalScale.set(tierRadius, tierHeight, tierRadius);
               treeLocalMatrix.compose(
                 treeLocalPosition,
                 treeLocalQuaternion,
                 treeLocalScale
               );
-              treeWorldMatrix.multiplyMatrices(
-                treeBaseMatrix,
-                treeLocalMatrix
+              treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
+              fullFoliageBatches[tierIndex].setMatrixAt(i, treeWorldMatrix);
+
+              const snowLoadScale = 0.68 + treeData.snowLoad * 0.32;
+              treeLocalPosition.set(0, tierY + tierHeight * 0.36, 0);
+              treeLocalEuler.set(
+                curSwayX,
+                variation.rotation + variation.snowRotation,
+                curSwayZ,
+                'YXZ'
               );
-              appendTreeInstance(
-                distantSnowBatch,
-                treeWorldMatrix,
-                treeData.snowColor
+              treeLocalQuaternion.setFromEuler(treeLocalEuler);
+              treeLocalScale.set(
+                tierRadius * 1.04 * variation.snowX * snowLoadScale,
+                tierHeight * 0.28 * variation.snowY,
+                tierRadius * 1.04 * variation.snowZ * snowLoadScale
               );
+              treeLocalMatrix.compose(
+                treeLocalPosition,
+                treeLocalQuaternion,
+                treeLocalScale
+              );
+              treeWorldMatrix.multiplyMatrices(treeBaseMatrix, treeLocalMatrix);
+              fullSnowBatches[tierIndex].setMatrixAt(i, treeWorldMatrix);
+
+              fullFoliageBatches[tierIndex].setColorAt(
+                i,
+                treeData.foliageColor
+              );
+              fullSnowBatches[tierIndex].setColorAt(i, treeData.snowColor);
             }
           }
 
-          for (let i = 0; i < allTreeLodBatches.length; i += 1) {
-            const batch = allTreeLodBatches[i];
-            batch.visible = batch.count > 0;
-            if (!batch.visible) continue;
-            batch.instanceMatrix.needsUpdate = true;
-            if (batch.instanceColor) batch.instanceColor.needsUpdate = true;
+          for (let tierIndex = 0; tierIndex < MAX_TREE_TIERS; tierIndex += 1) {
+            fullFoliageBatches[tierIndex].instanceMatrix.needsUpdate = true;
+            fullSnowBatches[tierIndex].instanceMatrix.needsUpdate = true;
+            if (fullFoliageBatches[tierIndex].instanceColor) {
+              fullFoliageBatches[tierIndex].instanceColor.needsUpdate = true;
+            }
+            if (fullSnowBatches[tierIndex].instanceColor) {
+              fullSnowBatches[tierIndex].instanceColor.needsUpdate = true;
+            }
+            fullFoliageBatches[tierIndex].castShadow = !isInsideCabin;
           }
-
           treeTrunkInstances.castShadow = !isInsideCabin;
-          for (let i = 0; i < fullFoliageBatches.length; i += 1) {
-            fullFoliageBatches[i].castShadow = !isInsideCabin;
-            fullSnowBatches[i].castShadow = false;
-          }
-          for (let i = 0; i < mediumFoliageBatches.length; i += 1) {
-            mediumFoliageBatches[i].castShadow = false;
-            mediumSnowBatches[i].castShadow = false;
-          }
-          distantFoliageBatch.castShadow = false;
-          distantSnowBatch.castShadow = false;
         }
 
         const cloudMaterial = new THREE.MeshStandardMaterial({
@@ -9185,6 +9097,7 @@
         prepareWoodMaterialResponses();
         updateDynamicMaterialResponses(0, 1);
         updateIceEnvironmentMap(0, 1);
+        updateWindSway(0, 1);
         initializeLightProbeGI();
         updateLightProbeIrradiance();
         requestAnimationFrame(animate);
